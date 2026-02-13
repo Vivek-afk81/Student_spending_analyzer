@@ -1,4 +1,6 @@
 import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 def compute_monthly_spend(expenses: pd.DataFrame) -> pd.DataFrame:
     """
@@ -76,5 +78,70 @@ def detect_monthly_anomalies(
     )
 
     flagged = monthly[monthly["monthly_alert"]].copy()
+
+    return flagged
+
+
+## adding monthly features for ML
+
+def compute_monthly_features(expenses: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute basic monthly behavioral features per user.
+    """
+
+    monthly_features = (
+        expenses
+        .groupby(["user_id", "year_month"])
+        .agg(
+            total_spend=("amount", "sum"),
+            num_transactions=("amount", "count"),
+            avg_transaction=("amount", "mean"),
+            max_transaction=("amount", "max"),
+        )
+        .reset_index()
+    )
+
+    return monthly_features
+
+
+
+
+def detect_ml_anomalies(monthly_features: pd.DataFrame) -> pd.DataFrame:
+    """
+    Use Isolation Forest to detect anomalous monthly behavior.
+    """
+
+    # Remove incomplete month
+    monthly_features = monthly_features[
+        monthly_features["year_month"] != "2025-11"
+    ].copy()
+
+    feature_cols = [
+        "total_spend",
+        "num_transactions",
+        "avg_transaction",
+        "max_transaction",
+    ]
+
+    X = monthly_features[feature_cols]
+
+    # Scale features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Isolation Forest
+    model = IsolationForest(
+        contamination=0.05,
+        random_state=42
+    )
+
+    monthly_features["ml_anomaly"] = model.fit_predict(X_scaled)
+
+    # Convert: -1 = anomaly, 1 = normal
+    monthly_features["ml_anomaly"] = (
+        monthly_features["ml_anomaly"] == -1
+    )
+
+    flagged = monthly_features[monthly_features["ml_anomaly"]].copy()
 
     return flagged

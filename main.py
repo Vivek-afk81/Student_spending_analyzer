@@ -1,27 +1,33 @@
 from src.load_data import load_transactions
-from src.monthly_anomaly import compute_monthly_spend, remove_incomplete_months,compute_monthly_baseline,detect_monthly_anomalies
-from src.alert_generator import format_monthly_alert
+from src.monthly_anomaly import compute_monthly_spend,remove_incomplete_months,compute_monthly_baseline,detect_monthly_anomalies,compute_monthly_features,detect_ml_anomalies
+
+
 
 def main():
-    df=load_transactions("data/raw/transactions.csv")
+    df = load_transactions("data/raw/transactions.csv")
 
-
+    """ Rule-based anomalies detection"""
     monthly = compute_monthly_spend(df)
     monthly_clean = remove_incomplete_months(monthly)
-    monthly_with_baseline= compute_monthly_baseline(monthly_clean)
-    
-    flagged = detect_monthly_anomalies(monthly_with_baseline)
-    
-    print(f"\nTotal Monthly Alerts: {len(flagged)}")
+    monthly_with_baseline = compute_monthly_baseline(monthly_clean)
+    rule_flagged = detect_monthly_anomalies(monthly_with_baseline)
 
-    for _, row in flagged.iterrows():
-        message = format_monthly_alert(row)
-        print(message)
+    """ ML-based anomalies detection"""
+    monthly_features = compute_monthly_features(df)
+    ml_flagged = detect_ml_anomalies(monthly_features)
+
+    print("Rule alerts:", len(rule_flagged))
+    print("ML alerts:", len(ml_flagged))
+
+    """ Comparing  overlap between rule based and ML based anomalies"""
+    overlap = rule_flagged.merge(
+        ml_flagged[["user_id", "year_month"]],
+        on=["user_id", "year_month"]
+    )
+
+    print("Overlap count:", len(overlap))
+    print(overlap[["user_id", "year_month"]])
 
 
-    
-
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
